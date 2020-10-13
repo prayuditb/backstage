@@ -1,0 +1,89 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: backstage
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backstage-backend
+  namespace: backstage
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backstage-backend
+  template:
+    metadata:
+      labels:
+        app: backstage-backend
+    spec:
+      containers:
+        - name: backend
+          image: example-backend:latest
+          imagePullPolicy: Never
+
+          env:
+            - name: APP_ENV
+              value: production
+            - name: NODE_ENV
+              value: development
+
+          ports:
+            - name: http
+              containerPort: 7000
+
+          volumeMounts:
+            - name: config-volume
+              mountPath: /usr/src/app/app-config.local.yaml
+              subPath: app-config.local.yaml
+
+          resources:
+            limits:
+              cpu: 1
+              memory: 0.5Gi
+
+          readinessProbe:
+            httpGet:
+              port: 7000
+              path: /healthcheck
+          livenessProbe:
+            httpGet:
+              port: 7000
+              path: /healthcheck
+
+      volumes:
+        - name: config-volume
+          configMap:
+            name: backstage-config
+            items:
+              - key: app-config
+                path: app-config.local.yaml
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backstage-config
+  namespace: backstage
+data:
+  app-config: |
+    app:
+      baseUrl: http://localhost:8001
+      title: Backstage Kubernetes Deployment
+    backend:
+      baseUrl: http://localhost:8001
+---
+# http://localhost:8001/api/v1/namespaces/backstage/services/backstage-backend:http/proxy/
+apiVersion: v1
+kind: Service
+metadata:
+  name: backstage-backend
+  namespace: backstage
+spec:
+  selector:
+    app: backstage-backend
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
